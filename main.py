@@ -1,49 +1,59 @@
-import flask
+from flask import Flask, render_template, request, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 
+# Инициализация приложения
+app = Flask(__name__)
 
-app = flask.Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:123@localhost/test_db7'
+# Конфиг базы
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///phonebook.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
 db = SQLAlchemy(app)
 
 
-class Message(db.Model):
+class Contact(db.Model):
+    # Уникальный идентификатор контакта
     id = db.Column(db.Integer, primary_key=True)
-    text = db.Column(db.String(512), nullable=False)
+    # Имя контакта
+    name = db.Column(db.String(80), nullable=False)
+    # Номер телефона контакта
+    phone = db.Column(db.String(20), nullable=False)
 
-    def __init__(self, text, tags):
-        self.text = text
-        self.tags = [
-            Tag(text=tag) for tag in tags.split(',')
-        ]
-
-
-class Tag(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    text = db.Column(db.String(32), nullable=False)
-
-    message_id = db.Column(db.Integer, db.ForeignKey('message.id'), nullable=False)
-    message = db.relationship('Message', backref=db.backref('tags', lazy=True))
+    def __repr__(self):
+        # Возвращает строку, представляющую объект контакта
+        return f'<Contact {self.name}>'
 
 
-@app.route('/', methods=['GET'])
-def hello():
-    return flask.render_template('index.html', messages=Message.query.all())
+# Переход на основную страницу
+@app.route('/', methods=['GET', 'POST'])
+def main():
+    return redirect(url_for('index'))
 
 
-@app.route('/add_message', methods=['POST'])
-def add_message():
-    text = flask.request.form['text']
-    tag = flask.request.form['tag']
-    # messages.append(Message(text, tag))
-    db.session.add(Message(text, tag))
+# Добавление и чтение контактов
+@app.route('/add', methods=['GET', 'POST'])
+def index():
+    if request.method == 'POST':
+        name = request.form['name']
+        phone = request.form['phone']
+        contact = Contact(name=name, phone=phone)
+        db.session.add(contact)
+        db.session.commit()
+    contacts = Contact.query.all()
+    return render_template('index.html', contacts=contacts)
+
+
+# Удаление контактов
+@app.route('/contacts/<int:contact_id>', methods=['POST', 'DELETE'])
+def delete_contact(contact_id):
+    contact = Contact.query.get_or_404(contact_id)
+    db.session.delete(contact)
     db.session.commit()
-
-    return flask.redirect(flask.url_for('hello'))
-
+    return redirect(url_for('index'))
 
 
-
-with app.app_context():
+# Создание базы, если ее нет
+with app.app_context() as c:
     db.create_all()
+
 app.run()
